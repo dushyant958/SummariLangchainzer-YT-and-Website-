@@ -3,6 +3,9 @@ from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain.chains.summarize import load_summarize_chain
 from langchain_community.document_loaders import YoutubeLoader, UnstructuredURLLoader
+import yt_dlp
+from langchain.schema import Document
+import re
 
 # Setting up page configuration
 st.set_page_config(
@@ -11,6 +14,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state= "expanded",
 )
+
 st.title("SummariLangchainzer (YT and Website)")
 st.subheader("Summarizes given URL")
 
@@ -103,6 +107,96 @@ def get_custom_prompt(length, style):
         input_variables=["text"]
     )
 
+def load_youtube_with_yt_dlp(url):
+    """
+    Alternative YouTube loader using yt-dlp (more reliable than pytube)
+    """
+    try:
+        ydl_opts = {
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['en'],
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            # Try to get subtitles/transcript
+            transcript = ""
+            if 'subtitles' in info and 'en' in info['subtitles']:
+                # Get English subtitles
+                subtitle_url = info['subtitles']['en'][0]['url']
+                import urllib.request
+                with urllib.request.urlopen(subtitle_url) as response:
+                    subtitle_content = response.read().decode('utf-8')
+                    # Basic cleaning of subtitle content
+                    transcript = re.sub(r'<[^>]+>', '', subtitle_content)
+                    transcript = re.sub(r'\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}', '', transcript)
+                    transcript = ' '.join(transcript.split())
+            
+            elif 'automatic_captions' in info and 'en' in info['automatic_captions']:
+                # Get auto-generated captions
+                caption_url = info['automatic_captions']['en'][0]['url']
+                import urllib.request
+                with urllib.request.urlopen(caption_url) as response:
+                    caption_content = response.read().decode('utf-8')
+                    transcript = re.sub(r'<[^>]+>', '', caption_content)
+                    transcript = re.sub(r'\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}', '', transcript)
+                    transcript = ' '.join(transcript.split())
+            
+            # If no transcript available, use description
+            if not transcript and 'description' in info:
+                transcript = info['description']
+            
+            # Create Document object
+            metadata = {
+                'title': info.get('title', 'Unknown'),
+                'author': info.get('uploader', 'Unknown'),
+                'length': info.get('duration', 0),
+                'view_count': info.get('view_count', 0),
+                'source': url
+            }
+            
+            content = f"Title: {metadata['title']}\n"
+            content += f"Author: {metadata['author']}\n"
+            content += f"Content: {transcript}"
+            
+            return [Document(page_content=content, metadata=metadata)]
+            
+    except Exception as e:
+        st.error(f"yt-dlp failed: {str(e)}")
+        return None
+
+def load_youtube_fallback_methods(url):
+    """
+    Try multiple methods to load YouTube content
+    """
+    methods = [
+        ("LangChain YoutubeLoader", lambda: YoutubeLoader.from_youtube_url(url, add_video_info=True).load()),
+        ("yt-dlp method", lambda: load_youtube_with_yt_dlp(url)),
+    ]
+    
+    for method_name, method_func in methods:
+        try:
+            st.info(f"Trying {method_name}...")
+            result = method_func()
+            if result:
+                st.success(f"✅ Successfully loaded using {method_name}")
+                return result
+        except Exception as e:
+            st.warning(f"⚠️ {method_name} failed: {str(e)}")
+            continue
+    
+    # If all methods fail, create a basic document with just the URL
+    st.error("❌ All YouTube loading methods failed. Creating basic document.")
+    return [Document(
+        page_content=f"YouTube video: {url}\nNote: Could not extract transcript. Please check the video manually.",
+        metadata={'source': url}
+    )]
+
 if st.button("🚀 Summarize Content"):
     # Validation
     if not groq_api_key.strip():
@@ -133,22 +227,24 @@ if st.button("🚀 Summarize Content"):
                     with st.spinner(f"Loading content from URL {i+1}..."):
                         # Data Loading process
                         if "youtube.com" in url or "youtu.be" in url:
-                            loader = YoutubeLoader.from_youtube_url(url, add_video_info=True)
+                            data = load_youtube_fallback_methods(url)
                         else:
                             loader = UnstructuredURLLoader(
                                 urls=[url], 
                                 ssl_verify=False,
                                 headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"}
                             )
+                            data = loader.load()
                         
-                        data = loader.load()
-                        
-                        # Summarization chain
-                        chain = load_summarize_chain(llm, chain_type='stuff', prompt=prompt, verbose=False)
-                        summary = chain.run(data)
-                        
-                        # Store summary
-                        final_summary = str(summary).strip()
+                        if data and len(data) > 0 and data[0].page_content.strip():
+                            # Summarization chain
+                            chain = load_summarize_chain(llm, chain_type='stuff', prompt=prompt, verbose=False)
+                            summary = chain.run(data)
+                            
+                            # Store summary
+                            final_summary = str(summary).strip()
+                        else:
+                            final_summary = "Could not extract meaningful content from this URL."
                         
                         results.append({
                             'url': url,
