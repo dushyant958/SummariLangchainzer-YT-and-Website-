@@ -2,8 +2,8 @@
 
 SummariLangchainzer is a simple, fast, and powerful web app built using **LangChain** and **Streamlit** that summarizes the content of:
 
-- YouTube videos
-- Any public website/article URL
+- YouTube videos  
+- Any public website/article URL  
 
 ✨ It allows you to select the summary style (Paragraph, Bullet Points, Key Highlights)  
 ✨ You can also select the length of the summary (Brief, Medium, Detailed)  
@@ -27,23 +27,31 @@ SummariLangchainzer is a simple, fast, and powerful web app built using **LangCh
 
 ## 🛠️ Tech Stack
 
-- **LangChain** (LLM orchestration framework)
-- **Streamlit** (Frontend + App Framework)
-- **LangChain-Groq** (Using Llama3-8b-8192 model via Groq API)
-- **LangChain Community Document Loaders** (Youtube + UnstructuredURL)
-- **Validators** (URL validation)
+- **LangChain** (LLM orchestration framework)  
+- **Streamlit** (Frontend + App Framework)  
+- **LangChain-Groq** (Using Llama3-8b-8192 model via Groq API)  
+- **LangChain Community Document Loaders** (Youtube + UnstructuredURL)  
+- **Validators** (URL validation)  
 
 ---
 
 ## ⚙️ How it works
 
-1. You provide one or more **URLs** (YouTube or public web article).
-2. The app loads content using LangChain document loaders:
-   - `YoutubeLoader` for YouTube videos
-   - `UnstructuredURLLoader` for public web pages
-3. The app builds a **custom prompt** dynamically based on your selected style and length.
-4. The selected **Llama 3 model (via Groq API)** summarizes the content.
-5. You can download the generated summary as a `.txt` file.
+1. You provide one or more **URLs** (YouTube or public web article).  
+2. The app loads content using LangChain document loaders:  
+   - `YoutubeLoader` for YouTube videos  
+   - `UnstructuredURLLoader` for public web pages  
+3. The app builds a **custom prompt** dynamically based on your selected style and length.  
+4. The selected **Llama 3 model (via Groq API)** summarizes the content.  
+5. You can download the generated summary as a `.txt` file.  
+
+---
+
+## 📌 Important Notes (Token Limit / Video Duration)
+
+- We are using a **local model with a token limit of ~6000 tokens**.
+- For YouTube videos, it is **recommended to use videos of ~6-7 minutes** in length for best results.
+- You can try longer videos — the app will attempt to load and process them — but if it fails or gets truncated, please use shorter videos.
 
 ---
 
@@ -122,5 +130,3 @@ MIT License
 ## ⚠️ Disclaimer
 
 This app is for educational purposes only. It is not guaranteed to perfectly summarize all web content, and it depends on the availability and correctness of the source data.
-
----
